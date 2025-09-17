@@ -1,9 +1,10 @@
 import asyncio
 from os import getenv
 
-from aiogram import Bot, Dispatcher
+from aiogram import F, Bot, Dispatcher
 from aiogram.types import Message
 from dotenv import load_dotenv
+from aiogram_media_group import media_group_handler
 
 load_dotenv()
 
@@ -29,21 +30,33 @@ async def check_has_disclaimer(text: str = '') -> bool:
     return has_disclaimer
 
 
-async def check_needs_delete(message: Message) -> bool:
-    is_agent = await check_is_agent(message.from_user.id)
-    has_disclaimer = await check_has_disclaimer(message.text or message.caption or '')
+async def check_needs_delete(messages: list[Message]) -> bool:
+    is_agent = await check_is_agent(messages[0].from_user.id)
+    has_disclaimer = False
+    for message in messages:
+        has_disclaimer = await check_has_disclaimer(message.text or message.caption or '')
+        if has_disclaimer:
+            break
     return is_agent and not has_disclaimer
 
 
-async def delete_agent_message(message: Message) -> None:
-    if await check_needs_delete(message):
-        await message.answer(f'@{message.from_user.username}, Вам запрещено отправлять сообщения без дисклеймера о том, что Вы являетесь иностранным агентом.')
+async def delete_agent_messages(messages: list[Message]) -> None:
+    if not await check_needs_delete(messages):
+        return
+    await messages[0].answer(f'@{messages[0].from_user.username}, Вам запрещено отправлять сообщения без дисклеймера о том, что Вы являетесь иностранным агентом.')
+    for message in messages:
         await message.delete()
+
+
+async def delete_agent_message(message: Message) -> None:
+    await delete_agent_messages([message])
 
 
 async def main() -> None:
     dispatcher = Dispatcher()
     bot = Bot(token=TOKEN)
+    dispatcher.message.register(media_group_handler(delete_agent_messages), F.media_group_id)
+    dispatcher.edited_message.register(media_group_handler(delete_agent_messages), F.media_group_id)
     dispatcher.message.register(delete_agent_message)
     dispatcher.edited_message.register(delete_agent_message)
     await dispatcher.start_polling(bot)
