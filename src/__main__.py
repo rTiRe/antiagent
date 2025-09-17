@@ -31,7 +31,7 @@ async def check_has_disclaimer(text: str = '') -> bool:
 
 async def check_needs_delete(message: Message) -> bool:
     is_agent = await check_is_agent(message.from_user.id)
-    has_disclaimer = await check_has_disclaimer(message.text or '')
+    has_disclaimer = await check_has_disclaimer(message.text or message.caption or '')
     return is_agent and not has_disclaimer
 
 
